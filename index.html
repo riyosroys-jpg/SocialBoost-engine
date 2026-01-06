@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SocialHub | منصة تبادل المتابعين العالمية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; }
+        .tab-active { border-bottom: 3px solid #4f46e5; color: #4f46e5; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fas fa-rocket text-indigo-600 text-2xl"></i>
+                <span class="text-2xl font-black text-indigo-900 tracking-tighter">SOCIALHUB</span>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="bg-indigo-50 px-4 py-2 rounded-full flex items-center gap-2 border border-indigo-100">
+                    <i class="fas fa-coins text-yellow-500"></i>
+                    <span id="userBalance" class="font-bold text-indigo-700">0</span>
+                </div>
+                <button onclick="logout()" class="text-gray-400 hover:text-red-500 transition">
+                    <i class="fas fa-sign-out-alt"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-6 py-8">
+        
+        <div class="flex gap-8 mb-8 border-b border-gray-200">
+            <button onclick="switchTab('earn')" id="tabEarn" class="pb-4 font-bold tab-active">كسب النقاط</button>
+            <button onclick="switchTab('add')" id="tabAdd" class="pb-4 font-bold text-gray-500 hover:text-indigo-600">إضافة حملة</button>
+        </div>
+
+        <section id="sectionEarn">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="tasksList">
+                <div class="col-span-full text-center py-20 text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+                    <p>جاري تحميل المهام المتاحة...</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="sectionAdd" class="hidden">
+            <div class="max-w-xl mx-auto bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+                <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">أطلق حملة جديدة</h2>
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-bold mb-2">رابط الحساب المستهدف</label>
+                        <input type="text" id="targetLink" placeholder="https://instagram.com/username" class="w-full p-4 bg-gray-50 border rounded-2xl focus:ring-2 focus:ring-indigo-500 outline-none transition">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold mb-2">النقاط لكل متابع</label>
+                            <input type="number" id="pointsPer" value="10" min="5" class="w-full p-4 bg-gray-50 border rounded-2xl outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold mb-2">عدد المتابعين</label>
+                            <input type="number" id="requiredCount" placeholder="100" class="w-full p-4 bg-gray-50 border rounded-2xl outline-none">
+                        </div>
+                    </div>
+                    <div id="totalCostDisplay" class="p-4 bg-yellow-50 rounded-2xl text-yellow-800 text-sm font-bold">
+                        التكلفة الإجمالية: 0 نقطة
+                    </div>
+                    <button onclick="submitNewTask()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg transition duration-300">
+                        تأكيد ونشر الحملة
+                    </button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // تكوين الإعدادات
+        const CONFIG = {
+            API_BASE: "https://your-app-name.onrender.com/api", // استبدله برابط Render الخاص بك
+            USER_ID: 1 // هذا يجب أن يأتي من نظام تسجيل الدخول
+        };
+
+        // --- الوظائف الحركية ---
+
+        function switchTab(tab) {
+            document.getElementById('sectionEarn').classList.toggle('hidden', tab !== 'earn');
+            document.getElementById('sectionAdd').classList.toggle('hidden', tab !== 'add');
+            document.getElementById('tabEarn').className = tab === 'earn' ? 'pb-4 font-bold tab-active' : 'pb-4 font-bold text-gray-500';
+            document.getElementById('tabAdd').className = tab === 'add' ? 'pb-4 font-bold tab-active' : 'pb-4 font-bold text-gray-500';
+        }
+
+        // --- وظائف الـ API ---
+
+        // 1. تحديث رصيد المستخدم
+        async function updateBalance() {
+            try {
+                const response = await fetch(`${CONFIG.API_BASE}/user/${CONFIG.USER_ID}`);
+                const data = await response.json();
+                document.getElementById('userBalance').innerText = data.points_balance || 0;
+            } catch (e) { console.error("Balance fetch error"); }
+        }
+
+        // 2. جلب المهام
+        async function loadTasks() {
+            const list = document.getElementById('tasksList');
+            try {
+                const response = await fetch(`${CONFIG.API_BASE}/tasks/${CONFIG.USER_ID}`);
+                const tasks = await response.json();
+                
+                if(tasks.length === 0) {
+                    list.innerHTML = `<div class="col-span-full text-center text-gray-500">لا توجد مهام متاحة حالياً.</div>`;
+                    return;
+                }
+
+                list.innerHTML = tasks.map(task => `
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center text-xl">
+                                <i class="fab fa-instagram"></i>
+                            </div>
+                            <span class="text-xs font-bold bg-green-100 text-green-700 px-3 py-1 rounded-full">+ ${task.points_per_follow} نقطة</span>
+                        </div>
+                        <h3 class="font-bold text-gray-700 mb-4 truncate">${task.target_link}</h3>
+                        <button onclick="doTask('${task.target_link}', ${task.id})" class="w-full bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-600 font-bold py-3 rounded-xl transition">
+                            متابعة الآن
+                        </button>
+                    </div>
+                `).join('');
+            } catch (e) { list.innerHTML = "خطأ في الاتصال بالخادم"; }
+        }
+
+        // 3. تنفيذ المهمة
+        async function doTask(link, taskId) {
+            window.open(link, '_blank');
+            // ننتظر 3 ثوانٍ قبل طلب التأكيد لضمان أن المستخدم ذهب للمنصة
+            setTimeout(async () => {
+                if(confirm("هل أتممت المتابعة؟ سيتم مراجعة طلبك آلياً.")) {
+                    const res = await fetch(`${CONFIG.API_BASE}/tasks/verify`, {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ userId: CONFIG.USER_ID, taskId: taskId })
+                    });
+                    const result = await res.json();
+                    if(result.success) {
+                        alert("تمت العملية بنجاح!");
+                        location.reload();
+                    } else { alert(result.error); }
+                }
+            }, 3000);
+        }
+
+        // 4. إرسال حملة جديدة
+        async function submitNewTask() {
+            const payload = {
+                userId: CONFIG.USER_ID,
+                targetLink: document.getElementById('targetLink').value,
+                pointsPerFollow: parseInt(document.getElementById('pointsPer').value),
+                requiredFollows: parseInt(document.getElementById('requiredCount').value),
+                platform: 'Instagram'
+            };
+
+            const res = await fetch(`${CONFIG.API_BASE}/tasks/add`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if(data.id) {
+                alert("تم نشر حملتك بنجاح!");
+                location.reload();
+            } else { alert(data.error); }
+        }
+
+        // حساب التكلفة الإجمالية في الواجهة
+        document.addEventListener('input', () => {
+            const p = document.getElementById('pointsPer').value || 0;
+            const r = document.getElementById('requiredCount').value || 0;
+            document.getElementById('totalCostDisplay').innerText = `التكلفة الإجمالية: ${p * r} نقطة`;
+        });
+
+        // تشغيل الوظائف عند التحميل
+        window.onload = () => {
+            updateBalance();
+            loadTasks();
+        };
+    </script>
+</body>
+</html>
